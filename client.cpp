@@ -28,10 +28,7 @@ int readSocket(int clientSocket){
     if (n < 0){ 
 		fprintf(stderr,"Error: reading from socket");
 	}
-	if(atoi(buffer)!=200){
-		fprintf(stderr,"ERROR: received wrong code: %s %d.\n",buffer,atoi(buffer));
-		exit(1);		//TODO  Validate.
-	}	
+fprintf(stderr,"%s",buffer);//todo delete	
 	return 0;
 }
 
@@ -131,7 +128,6 @@ int main(int argc, char* argv[]) {
 	int pathLen=strlen(remotePath.c_str());
 	int port = getPort(remotePath);
 	
-
 	int clientSocket = getSocket();								//creates a socket
 	struct hostent *server;										//describes host
 	server = gethostbyname("localhost");						//get the IP
@@ -152,8 +148,6 @@ int main(int argc, char* argv[]) {
 	}	
 	
 	//Connected, read the message
-	
-	
 	string message = argv[1];	
 	std::transform(message.begin(), message.end(), message.begin(), std::ptr_fun<int, int>(std::toupper));		//uppercase the command
 	size_t pos = remotePath.find_last_of(to_string(port));														//cut the argument behind the port number
