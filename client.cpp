@@ -117,6 +117,8 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 		fprintf(stdout,"%s",outStr.c_str());			//lst output print
 	}else if (!strcmp("mkd",argv[1])){
 		printPotentialStderr(outStr);
+	}else if (!strcmp("rmd",argv[1])){
+		printPotentialStderr(outStr);
 	}	
 	return 0;		//TODO?
 }
