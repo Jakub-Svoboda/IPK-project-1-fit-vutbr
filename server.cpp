@@ -20,10 +20,25 @@
 #include <unistd.h>
 #include <sstream>
 #include <fstream>
+#include <dirent.h>
 
 
 #define BUFFER_SIZE 1024
 using namespace std;
+
+//returns true if path leads to a directory
+bool isItDir(string path){
+	struct stat s;
+	if( stat(path.c_str(),&s) == 0 ){
+		if( s.st_mode & S_IFDIR ){
+			return true;
+		}else{
+			return false;
+		}
+	}else{
+		return false;
+	}
+}
 
 //returns true if path leads to a file
 bool isItFile(string path){
@@ -49,10 +64,11 @@ void respond(string response, string content, int code, int sockfd2){
 	combined += "\n";
 	combined +="Content-Type: text/plain\n";
 	combined +="Content-Length: ";
-	combined +=to_string(strlen(content.c_str())-1);
+	combined +=to_string(strlen(content.c_str()));
 	combined += "\n";
-	combined += content;
 	combined +="\r\n";
+	combined += content;
+	
 
 	int n = write(sockfd2, combined.c_str()  ,combined.length());
 	if (n < 0) {
@@ -67,8 +83,7 @@ bool fileExists(string &str){
 }
 
 //parses the remote path from 
-string getUrl(string message){
-	
+string getUrl(string message){	
 	string url;
 	std::istringstream f(message.c_str());
 	std::string line;   
@@ -81,8 +96,137 @@ string getUrl(string message){
 	return url;
 }
 
+//Function for the RMD operation
+void rmd(string message, string url, int code, string root,string response, int sockfd2){
+	string content = "";
+	if(url[0]=='/'){		//remove the /, we are deling with a file
+		url=url.substr(1,url.length());
+	}
+	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
+		root+="/";
+	}
+	url=root+url;					//append root to the url, if not specified, "" is appended
+	if(fileExists(url) && !isItDir(url)){
+		code=400;	//todo
+		response="Not a directory.\n";
+		content=response;
+	}else if(!isItDir(url)){	//TODO Directory not found
+		code=404;	//todo
+		response="Directory not found.\n";
+		content=response;			
+	}else{	
+		int a = rmdir(url.c_str());
+		if(a){
+			response="Directory not empty.\n";
+			code=400;
+			content=response;
+		}else{
+			code=200;	
+			response="OK\n";
+			content=response;
+		}
+	}
+	respond(response, content, code, sockfd2);	
+}
+
+//Function for the MKD operation
+void mkd(string message, string url, int code, string root,string response, int sockfd2){
+	string content = "";
+	if(url[0]=='/'){		//remove the /, we are deling with a file
+		url=url.substr(1,url.length());
+	}
+	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
+		root+="/";
+	}
+	url=root+url;					//append root to the url, if not specified, "" is appended
+	if(isItDir(url)){
+		response="Already exists.\n";
+		code = 400;		//todo
+		content=response;	
+	}else{
+		int a = mkdir(url.c_str(),S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);	//todo no write permission?
+		if(a!=0){
+			response="Unknown error.\n";
+			code = 400;
+			content=response;
+		}else{
+			response="OK";
+			code = 200;
+			content=response;
+		}				
+	}
+	respond(response, content, code, sockfd2);	
+}
+
+//Function for the LST operation //TODO no put loop in client?
+void lst(string message, string url, int code, string root,string response, int sockfd2){
+	string content="";
+	if(url[0]=='/'){		//remove the /, we are deling with a folder
+		url=url.substr(1,url.length());
+	}
+	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
+		root+="/";
+	}
+	url=root+url;					//append root to the url, if not specified, "" is appended
+	if(url.length()==0){
+		url=".";
+	}
+	if(fileExists(url) && !isItDir(url)){
+		code=400;	//todo
+		response="Not a directory.\n";
+		content=response;
+	}else if(!isItDir(url)){	//TODO Directory not found
+		code=404;	//todo
+		response="Directory not found.\n";
+		content=response;			
+	}else{	
+		DIR* d = opendir(url.c_str());
+		for(struct dirent *de = NULL; (de = readdir(d)) != NULL; ){
+			if(!strcmp(".",de->d_name) or !strcmp("..",de->d_name)){
+				continue;
+			}
+			content+=de->d_name;
+			content+=" ";
+		}
+		content=content.substr(0,content.length() -1);
+		content+="\n";			
+		closedir(d);
+		code=200;
+		response="OK";	
+	}
+	respond(response, content, code, sockfd2);
+}
+
+//Function for the PUT operation //TODO no put loop in client
+void put(string message, string url, int code, string root,string response, int sockfd2){
+	string content="";
+	if(url[0]=='/'){		//remove the /, we are deling with a file
+		url=url.substr(1,url.length());
+	}
+	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
+		root+="/";
+	}
+	url=root+url;					//append root to the url, if not specified, "" is appended
+	if(fileExists(url)){
+		code=400;	//todo
+		response="Already exists.\n";
+		content=response;			
+	}else{	
+		for(int i = 0; i < 7; i++){
+			message.erase(0, message.find("\n") + 1);
+		}
+		std::ofstream outfile (url);
+		outfile << message;
+		outfile.close();
+		code=200;
+		response="OK";
+		content=response;		
+	}
+	respond(response, content, code, sockfd2);
+}
+
 //Function for the DEL operation
-void del(string message, string url, int code, string root,string response, int sockfd2){
+void del(string message, string url, int code, string root, string response, int sockfd2){
 	string content="";
 	if(url[0]=='/'){		//remove the /, we are deling with a file
 		url=url.substr(1,url.length());
@@ -94,23 +238,23 @@ void del(string message, string url, int code, string root,string response, int 
 	if(fileExists(url)){
 		if(isItFile(url)){	
 			if( remove(url.c_str()) != 0 ){
-				response="Unknown error.";
-				code=400;	//todo? neslo remove
+				response="Unknown error.\n";
+				code=400;				//todo? neslo remove
 				content=response;
-			}else{	//removed just fine
+			}else{						//removed just fine
 				code=200;
 				response="OK";
 				content=response;
 			}
-		}else{		//not a file, its a folder
+		}else{							//not a file, its a folder
 			code=400;
-			response="Not a file.";
+			response="Not a file.\n";
 			content=response;
 		}
 			
 	}else{
-		response="File not found.";
-		code = 404;		//todo
+		response="File not found.\n";
+		code = 404;						//todo
 		content=response;
 	}
 	respond(response, content, code, sockfd2);	
@@ -135,14 +279,21 @@ void get(string message, string url, int code, string root,string response, int 
 			content=content2;
 		}else{		//not a file, its a folder
 			code=400;
-			response="Not a file.";
+			response="Not a file.\n";
 			content=response;
 		}			
 	}else{
-		response="File not found.";
-		code = 404;		//todo
-		content=response;
+		if(isItDir(url)){
+			response="Not a file.\n";
+			code = 400;		//todo
+			content=response;	
+		}else{
+			response="File not found.\n";
+			code = 404;		//todo
+			content=response;			
+		}
 	}
+
 	respond(response, content, code, sockfd2);	
 }
 
@@ -157,31 +308,19 @@ void getRequest(int sockfd2, string root){
 	string message(buffer);
 	string url=getUrl(message);
 	int code=200;											//response code will be filled here
-	string response;
+	string response;	
 	if(message[0] == 'D'){	//DEL operation
 		del(message,url,code,root, response,sockfd2);				
 	}else if (message[0] == 'G'){//GET operation	
 		get(message,url,code,root, response,sockfd2);	
 	}else if (message[0] == 'P'){
-		int n = write(sockfd2,"200",4);
-		if (n < 0) {
-			fprintf(stderr,"Error: Could not write to socket.\n");
-		}
+		put(message,url,code,root, response,sockfd2);
 	}else if (message[0] == 'L'){
-		int n = write(sockfd2,"200",4);
-		if (n < 0) {
-			fprintf(stderr,"Error: Could not write to socket.\n");
-		}
+		lst(message,url,code,root, response,sockfd2);
 	}else if (message[0] == 'M'){
-		int n = write(sockfd2,"200",4);
-		if (n < 0) {
-			fprintf(stderr,"Error: Could not write to socket.\n");
-		}
+		mkd(message,url,code,root, response,sockfd2);
 	}else if (message[0] == 'R'){
-		int n = write(sockfd2,"200",4);
-		if (n < 0) {
-			fprintf(stderr,"Error: Could not write to socket.\n");
-		}
+		rmd(message,url,code,root, response,sockfd2);
 	}else{
 		exit(1);	//Should not happen, commands are checked before on clients side.
 	}

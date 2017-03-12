@@ -13,23 +13,112 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <netdb.h> 
 #include <regex>
 #include <unistd.h>
+#include <sstream>
+#include <fstream>
 
 
 #define BUFFER_SIZE 1024
 using namespace std;
-int readSocket(int clientSocket){
-	char buffer[BUFFER_SIZE];
-	bzero(buffer,BUFFER_SIZE);
-	int n = read(clientSocket,buffer,BUFFER_SIZE-1);
-    if (n < 0){ 
-		fprintf(stderr,"Error: reading from socket");
+
+
+//returns true if path leads to a directory
+bool isItDir(string path){
+	struct stat s;
+	if( stat(path.c_str(),&s) == 0 ){
+		if( s.st_mode & S_IFDIR ){
+			return true;
+		}else{
+			return false;
+		}
+	}else{
+		return false;
 	}
-fprintf(stderr,"%s",buffer);//todo delete	
-	return 0;
+}
+
+//returns true if path leads to a file
+bool isItFile(string path){
+	struct stat buf;
+    stat(path.c_str(), &buf);
+    return S_ISREG(buf.st_mode);
+}
+
+//reads from file to string
+string getContent(string localPath){
+	if(localPath[localPath.length()-1 ]== '/'){
+		localPath=localPath.substr(0, localPath.length()-1);
+	}
+	if(localPath.length() > 0 and isItFile(localPath)){
+		
+		std::ifstream ifs(localPath);
+		string content( (std::istreambuf_iterator<char>(ifs) ),(std::istreambuf_iterator<char>()    ) );
+		return content;
+	}else{
+		return "";
+	}
+}
+
+//prints an error to stderr when a non 200 code is received
+void printPotentialStderr(string outStr){
+	size_t pos = outStr.find_first_of("\n");	
+	if(outStr[9] !='2' or outStr[10] !='0' or outStr[11] !='0' ){			
+		outStr=outStr.substr(0,pos);
+		outStr=outStr.substr(13,outStr.length());
+		fprintf(stderr,"%s\n",outStr.c_str());
+		exit(-1);	//totdo, if not exited here, file will be created regardless if get was the command
+	}
+}
+
+//reads from socket and formats the answer message
+int readSocket(int clientSocket,char* argv[], int argc, string remotePath, string localPath){
+	string outStr="";
+	char buf[BUFFER_SIZE];
+	//cicles while reading from socket
+	while(1){
+		int numread;
+		if ((numread = read(clientSocket, buf, sizeof(buf) -1)) == -1){
+			fprintf(stderr,"Error: reading from socket");		//TODO exit
+		}
+		if (numread == 0){
+			break;
+		}	
+		buf[numread] = '\0';
+		outStr+=buf;
+	}
+//fprintf(stderr,"%s",outStr.c_str());//todo delete
+	
+	if(!strcmp("get",argv[1])){		//we got back a file, create a new file on clients side a write to it
+		string fileName= argv[2];
+		size_t pos = fileName.find_last_of("/");				
+		fileName = fileName.substr(pos+1, fileName.length());	
+		localPath+=fileName;
+		for(int i = 0; i<=4; i++){		//delete first 5 lines = header
+			if(i==0){
+				printPotentialStderr(outStr);
+			}
+			outStr.erase(0, outStr.find("\n") + 1);
+		}	
+		std::ofstream outfile (localPath);
+		outfile << outStr ;
+		outfile.close();	
+	}else if (!strcmp("put",argv[1])){
+		printPotentialStderr(outStr);
+	}else if (!strcmp("del",argv[1])){
+		printPotentialStderr(outStr);	
+	}else if (!strcmp("lst",argv[1])){
+		printPotentialStderr(outStr);
+		for(int i = 0; i < 5; i++){
+			outStr.erase(0, outStr.find("\n") + 1);
+		}
+		fprintf(stdout,"%s",outStr.c_str());			//lst output print
+	}else if (!strcmp("mkd",argv[1])){
+		printPotentialStderr(outStr);
+	}	
+	return 0;		//TODO?
 }
 
 //Sends a message and checks if writing to socket was ok.
@@ -80,11 +169,15 @@ int getSocket(){
 
 //returns the localPath as string type, empty if none
 string getLocal(int argc, char* argv[]){
+	string local="";
 	if(argc == 3){
-		const char *s = "";
-		return s;		
+		return local;	
 	}else{
-		return argv[3];
+		local+=argv[3];
+		if(local[local.length()-1] != '/'){		
+			local+="/";
+		}
+		return local;
 	}
 }
 
@@ -99,6 +192,10 @@ void validateArgs(int argc, char* argv[]){
 				continue;
 			}
 			else if(!strcmp("put",argv[i])){
+				if(argc != 4){
+					fprintf(stderr,"Unknown error.\n");
+					exit(-1); //todo no local path
+				}
 				continue;
 			}
 			else if(!strcmp("lst",argv[i])){
@@ -155,7 +252,11 @@ int main(int argc, char* argv[]) {
 	time_t t = time(0);
 	struct tm time = *gmtime(&t);
 	strftime(buf, sizeof buf, "%a, %d %b %Y %H:%M:%S %Z", &time);		//format for Date
-	
+
+	string content="";
+	if(!strcmp(argv[1],"put")){
+		content=getContent(localPath);
+	}	
 	string justPath = remotePath.substr(pos+1);
 	message+= " ";
 	message+=justPath;	
@@ -171,9 +272,10 @@ int main(int argc, char* argv[]) {
 	message+=to_string(pathLen);
 	message+="\n";
 	message+="\r\n";
+	message+=content;
 	
 	send(message,clientSocket);
-	readSocket(clientSocket);
+	readSocket(clientSocket,argv, argc, remotePath, localPath);
 	
     
 	
