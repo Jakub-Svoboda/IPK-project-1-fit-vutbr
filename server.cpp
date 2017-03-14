@@ -26,6 +26,16 @@
 #define BUFFER_SIZE 1024
 using namespace std;
 
+//controls if url contains ..
+bool goesUp(string url){
+	if (url.find("..") != std::string::npos) {
+		return true;
+	}else{
+		return false;
+	}
+
+}
+
 //returns true if path leads to a directory
 bool isItDir(string path){
 	struct stat s;
@@ -57,7 +67,6 @@ void respond(string response, string content, int code, int sockfd2){
 	combined+=to_string(code);
 	combined += " ";
 	combined += response;
-	combined += "\n";
 	combined +="Date: ";
 	combined +=buf;
 	combined += "\n";
@@ -102,25 +111,31 @@ void rmd(string message, string url, int code, string root,string response, int 
 	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
 		root+="/";
 	}
-	url=root+url;					//append root to the url, if not specified, "" is appended
-	if(fileExists(url) && !isItDir(url)){
-		code=400;	//todo
-		response="Not a directory.\n";
+	if(goesUp(url)){
+		response="Unknown error.\n";
+		code=400;
 		content=response;
-	}else if(!isItDir(url)){	//TODO Directory not found
-		code=404;	//todo
-		response="Directory not found.\n";
-		content=response;			
-	}else{	
-		int a = rmdir(url.c_str());
-		if(a){
-			response="Directory not empty.\n";
-			code=400;
+	}else{
+		url=root+url;					//append root to the url, if not specified, "" is appended
+		if(fileExists(url) && !isItDir(url)){
+			code=400;	//todo
+			response="Not a directory.\n";
 			content=response;
-		}else{
-			code=200;	
-			response="OK\n";
-			content=response;
+		}else if(!isItDir(url)){	//TODO Directory not found
+			code=404;	//todo
+			response="Directory not found.\n";
+			content=response;			
+		}else{	
+			int a = rmdir(url.c_str());
+			if(a){
+				response="Directory not empty.\n";
+				code=400;
+				content=response;
+			}else{
+				code=200;	
+				response="OK\n";
+				content=response;
+			}
 		}
 	}
 	respond(response, content, code, sockfd2);	
@@ -135,24 +150,30 @@ void mkd(string message, string url, int code, string root,string response, int 
 	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
 		root+="/";
 	}
-	url=root+url;					//append root to the url, if not specified, "" is appended	
-	if(isItDir(url)){
-		response="Already exists.\n";
-		code = 400;		//todo
-		content=response;	
+		if(goesUp(url)){
+		response="Unknown error.\n";
+		code=400;
+		content=response;
 	}else{
-		int a = mkdir(url.c_str(),S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);	//todo no write permission?
-		if(a!=0){
-			
-			response="Unknown error.\n";
-			code = 400;
-			content=response;
+		url=root+url;					//append root to the url, if not specified, "" is appended	
+		if(isItDir(url)){
+			response="Already exists.\n";
+			code = 400;		//todo
+			content=response;	
 		}else{
-			response="OK";
-			code = 200;
-			content=response;
-		}				
-	}
+			int a = mkdir(url.c_str(),S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);	//todo no write permission?
+			if(a!=0){
+				
+				response="Unknown error.\n";
+				code = 400;
+				content=response;
+			}else{
+				response="OK\n";
+				code = 200;
+				content=response;
+			}				
+		}
+	}	
 	respond(response, content, code, sockfd2);	
 }
 
@@ -165,33 +186,39 @@ void lst(string message, string url, int code, string root,string response, int 
 	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
 		root+="/";
 	}
-	url=root+url;					//append root to the url, if not specified, "" is appended
-	if(url.length()==0){
-		url=".";
-	}
-	if(fileExists(url) && !isItDir(url)){
-		code=400;	//todo
-		response="Not a directory.\n";
+	if(goesUp(url)){
+		response="Unknown error.\n";
+		code=400;
 		content=response;
-	}else if(!isItDir(url)){	//TODO Directory not found
-		code=404;	//todo
-		response="Directory not found.\n";
-		content=response;			
-	}else{	
-		DIR* d = opendir(url.c_str());
-		for(struct dirent *de = NULL; (de = readdir(d)) != NULL; ){
-			if(!strcmp(".",de->d_name) or !strcmp("..",de->d_name)){
-				continue;
-			}
-			content+=de->d_name;
-			content+=" ";
+	}else{
+		url=root+url;					//append root to the url, if not specified, "" is appended
+		if(url.length()==0){
+			url=".";
 		}
-		content=content.substr(0,content.length() -1);
-		content+="\n";			
-		closedir(d);
-		code=200;
-		response="OK";	
-	}
+		if(fileExists(url) && !isItDir(url)){
+			code=400;	//todo
+			response="Not a directory.\n";
+			content=response;
+		}else if(!isItDir(url)){	//TODO Directory not found
+			code=404;	//todo
+			response="Directory not found.\n";
+			content=response;			
+		}else{	
+			DIR* d = opendir(url.c_str());
+			for(struct dirent *de = NULL; (de = readdir(d)) != NULL; ){
+				if(!strcmp(".",de->d_name) or !strcmp("..",de->d_name)){
+					continue;
+				}
+				content+=de->d_name;
+				content+=" ";
+			}
+			content=content.substr(0,content.length() -1);
+			content+="\n";			
+			closedir(d);
+			code=200;
+			response="OK\n";	
+		}
+	}	
 	respond(response, content, code, sockfd2);
 }
 
@@ -204,22 +231,28 @@ void put(string message, string url, int code, string root,string response, int 
 	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
 		root+="/";
 	}
-	url=root+url;					//append root to the url, if not specified, "" is appended
-	if(fileExists(url)){
-		code=400;	//todo
-		response="Already exists.\n";
-		content=response;			
-	}else{	
-		for(int i = 0; i < 7; i++){
-			message.erase(0, message.find("\n") + 1);
+	if(goesUp(url)){
+		response="Unknown error.\n";
+		code=400;
+		content=response;
+	}else{
+		url=root+url;					//append root to the url, if not specified, "" is appended
+		if(fileExists(url)){
+			code=400;	//todo
+			response="Already exists.\n";
+			content=response;			
+		}else{	
+			for(int i = 0; i < 7; i++){
+				message.erase(0, message.find("\n") + 1);
+			}
+			std::ofstream outfile (url);
+			outfile << message;
+			outfile.close();
+			code=200;
+			response="OK\n";
+			content=response;		
 		}
-		std::ofstream outfile (url);
-		outfile << message;
-		outfile.close();
-		code=200;
-		response="OK";
-		content=response;		
-	}
+	}	
 	respond(response, content, code, sockfd2);
 }
 
@@ -232,29 +265,35 @@ void del(string message, string url, int code, string root, string response, int
 	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
 		root+="/";
 	}
-	url=root+url;					//append root to the url, if not specified, "" is appended
-	if(fileExists(url)){
-		if(isItFile(url)){	
-			if( remove(url.c_str()) != 0 ){
-				response="Unknown error.\n";
-				code=400;				//todo? neslo remove
-				content=response;
-			}else{						//removed just fine
-				code=200;
-				response="OK";
+	if(goesUp(url)){
+		response="Unknown error.\n";
+		code=400;
+		content=response;
+	}else{
+		url=root+url;					//append root to the url, if not specified, "" is appended
+		if(fileExists(url)){
+			if(isItFile(url)){	
+				if( remove(url.c_str()) != 0 ){
+					response="Unknown error.\n";
+					code=400;				//todo? neslo remove
+					content=response;
+				}else{						//removed just fine
+					code=200;
+					response="OK\n";
+					content=response;
+				}
+			}else{							//not a file, its a folder
+				code=400;
+				response="Not a file.\n";
 				content=response;
 			}
-		}else{							//not a file, its a folder
-			code=400;
-			response="Not a file.\n";
+				
+		}else{
+			response="File not found.\n";
+			code = 404;						//todo
 			content=response;
 		}
-			
-	}else{
-		response="File not found.\n";
-		code = 404;						//todo
-		content=response;
-	}
+	}	
 	respond(response, content, code, sockfd2);	
 }
 
@@ -267,31 +306,36 @@ void get(string message, string url, int code, string root,string response, int 
 	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
 		root+="/";
 	}
-	url=root+url;					//append root to the url, if not specified, "" is appended
-	if(fileExists(url)){
-		if(isItFile(url)){	
-			std::ifstream ifs(url);
-			string content2((std::istreambuf_iterator<char>(ifs)),(std::istreambuf_iterator<char>()));
-			response="OK";
-			code = 200;
-			content=content2;
-		}else{		//not a file, its a folder
-			code=400;
-			response="Not a file.\n";
-			content=response;
-		}			
-	}else{
-		if(isItDir(url)){
-			response="Not a file.\n";
-			code = 400;		//todo
-			content=response;	
+	if(goesUp(url)){
+		response="Unknown error.\n";
+		code=400;
+		content=response;
+	}else{	
+		url=root+url;					//append root to the url, if not specified, "" is appended
+		if(fileExists(url)){
+			if(isItFile(url)){	
+				std::ifstream ifs(url);
+				string content2((std::istreambuf_iterator<char>(ifs)),(std::istreambuf_iterator<char>()));
+				response="OK\n";
+				code = 200;
+				content=content2;
+			}else{		//not a file, its a folder
+				code=400;
+				response="Not a file.\n";
+				content=response;
+			}			
 		}else{
-			response="File not found.\n";
-			code = 404;		//todo
-			content=response;			
+			if(isItDir(url)){
+				response="Not a file.\n";
+				code = 400;		//todo
+				content=response;	
+			}else{
+				response="File not found.\n";
+				code = 404;		//todo
+				content=response;			
+			}
 		}
 	}
-
 	respond(response, content, code, sockfd2);	
 }
 
@@ -311,28 +355,31 @@ int parseLength(char buf[BUFFER_SIZE]){
 int parseHeaderLength(char buf[BUFFER_SIZE]){
 	string message = buf;
 	int length=0;
-	for (int i =0; i< 6; i++){
-		length+=message.find("\n");
+	for (int i =0; i< 7; i++){
+		length+=message.find("\n")+1;
 		message.erase(0, message.find("\n") + 1);
 	}
 	return length;
 }
 
 //reads the command
-void getRequest(int sockfd2, string root){	
+void getRequest(int sockfd2, string root){		
+	
 	std::vector<char> outStr2;
 	char buf[BUFFER_SIZE];
 	int numread;
 	int length=0;
 	int headerLength=1;
 	int numReadTotal=0;
-	numread=0;
+	numread=0;	
 	//cicles while reading from socket
-	while(numReadTotal<(length+headerLength)){		
+	while(numReadTotal<(length+headerLength)){	
+
 		if ((numread= read(sockfd2, buf, sizeof(buf)-1)) == -1){
 			fprintf(stderr,"Error: reading from socket");		//TODO exit
 			exit(1);
 		}
+	
 		if(numReadTotal == 0){
 			length = parseLength(buf);							//get the content lenght from the header	
 			headerLength=parseHeaderLength(buf);
@@ -341,6 +388,7 @@ void getRequest(int sockfd2, string root){
 		for(int i = 0; i< numread; i++){
 			outStr2.push_back(buf[i]);
 		}	
+	//cerr<<"bar numread: "<<numread << " numreadtotal: "<< numReadTotal<< " length: "<<length<< " headerLength: "<<headerLength <<endl;//TODO deleteme		
 	}
 	
 	string message(outStr2.begin(), outStr2.end());
@@ -478,6 +526,7 @@ int main(int argc, char* argv[]) {
 	}   
 	
 	while(1){
+		
 		listen(sockfd,10);
 		socklen_t clilen = sizeof(clientAddress);
 		int sockfd2 = accept(sockfd, (struct sockaddr *) &clientAddress, &clilen);

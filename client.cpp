@@ -43,7 +43,7 @@ int parseHeaderLength(char buf[BUFFER_SIZE]){
 	string message = buf;
 	int length=0;
 	for (int i =0; i< 5; i++){
-		length+=message.find("\n");
+		length+=message.find("\n")+1;
 		message.erase(0, message.find("\n") + 1);
 	}
 	return length;
@@ -91,13 +91,14 @@ string getContent(string localPath){
 }
 
 //prints an error to stderr when a non 200 code is received
-void printPotentialStderr(string outStr){
+void printPotentialStderr(string outStr,int clientSocket){
 	size_t pos = outStr.find_first_of("\n");
 	if(outStr[9] !='2' or outStr[10] !='0' or outStr[11] !='0' ){			
 		outStr=outStr.substr(0,pos);
 		outStr=outStr.substr(13,outStr.length());
 		fprintf(stderr,"%s\n",outStr.c_str());
-		
+		close(clientSocket);
+//cerr<<"foo this is client, closed now from printPotentialStderr"<<endl<<endl;	
 		exit(1);	//todo, if not exited here, file will be created regardless if get was the command
 	}
 }
@@ -112,8 +113,9 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 	int headerLength=1;
 	int numReadTotal=0;
 	numread=0;
-	//cicles while reading from socket	
-	while(numReadTotal<(length+headerLength)){	
+	//cicles while reading from socket
+cerr<<"foo"<<endl;		
+	while(numReadTotal<(length+headerLength)){		
 		if ((numread= read(clientSocket, buf, sizeof(buf)-1)) == -1){
 			fprintf(stderr,"Error: reading from socket");		//TODO exit
 			exit(1);
@@ -126,8 +128,9 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 		for(int i = 0; i< numread; i++){
 			outStr2.push_back(buf[i]);
 		}
-		//cerr<<"numread " <<numread<< " " << numReadTotal << " " << length << " " << headerLength<< endl;	
+cerr<<"numread " <<numread<< " " << numReadTotal << " " << length << " " << headerLength<< endl;	
 	}
+cerr<<"bar"<<endl;	
 	string outStr(outStr2.begin(), outStr2.end());
 	if(!strcmp("get",argv[1])){		//we got back a file, create a new file on clients side a write to it
 		string fileName= argv[2];
@@ -136,7 +139,7 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 		localPath+=fileName;	
 		for(int i = 0; i<=4; i++){		//delete first 5 lines = header
 			if(i==0){
-				printPotentialStderr(outStr);
+				printPotentialStderr(outStr,clientSocket);
 			}
 			outStr.erase(0, outStr.find("\n") + 1);
 		}		
@@ -144,26 +147,27 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 		outfile << outStr ;
 		outfile.close();	
 	}else if (!strcmp("put",argv[1])){
-		printPotentialStderr(outStr);
+		printPotentialStderr(outStr,clientSocket);
 	}else if (!strcmp("del",argv[1])){
-		printPotentialStderr(outStr);	
+		printPotentialStderr(outStr,clientSocket);	
 	}else if (!strcmp("lst",argv[1])){
-		printPotentialStderr(outStr);
+		printPotentialStderr(outStr,clientSocket);
 		for(int i = 0; i < 5; i++){
 			outStr.erase(0, outStr.find("\n") + 1);
 		}
 		fprintf(stdout,"%s",outStr.c_str());			//lst output print
 	}else if (!strcmp("mkd",argv[1])){
-		printPotentialStderr(outStr);
+		printPotentialStderr(outStr,clientSocket);
 	}else if (!strcmp("rmd",argv[1])){
-		printPotentialStderr(outStr);
+		printPotentialStderr(outStr,clientSocket);
 	}	
-		
+			
 	return 0;		//TODO?
 }
 
 //Sends a message and checks if writing to socket was ok.
 void send(string message,int clientSocket){
+//cerr<<message;//TODO deleteme	
 	int n = write(clientSocket,message.c_str(),message.length());
     if (n < 0){ 
 		fprintf(stderr,"Error: Could not write to socket.");
@@ -217,6 +221,15 @@ string getLocal(int argc, char* argv[]){
 		local+=argv[3];
 		if(local[local.length()-1] != '/'){		
 			local+="/";
+		}
+		if(!strcmp(argv[1],"put")){
+			string a = argv[3];
+			if(isItFile(a)){
+				return local;
+			}else{
+				fprintf(stderr,"Error: local file not found.\n");
+				exit(1);
+			}
 		}
 		return local;
 	}
@@ -304,6 +317,7 @@ int main(int argc, char* argv[]) {
 			localPath=localPath.substr(0, localPath.length()-1);
 			if(!isItFile(localPath)){
 				cerr<<"Local file not found."<<endl;
+//cerr<<"foo this is client, closed now from local file not found"<<endl<<endl;
 				exit(1);
 			}
 		}
@@ -329,12 +343,11 @@ int main(int argc, char* argv[]) {
 	message+="\n";
 	message+="\r\n";
 	message+=content;	
-	send(message,clientSocket);
 	
+	send(message,clientSocket);	
 	readSocket(clientSocket,argv, argc, remotePath, localPath);
-
 	close(clientSocket);
-	
+//cerr<<"foo this is client, closed now"<<endl<<endl;
 }
 
 
