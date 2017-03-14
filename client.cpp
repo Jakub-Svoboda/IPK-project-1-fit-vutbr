@@ -20,11 +20,40 @@
 #include <unistd.h>
 #include <sstream>
 #include <fstream>
+#include <vector>
 
 
 #define BUFFER_SIZE 1024
 using namespace std;
 
+//parses the content length from the HTTP header
+int parseLength(char buf[BUFFER_SIZE]){
+	string message = buf;
+	for (int i =0; i< 3; i++){
+		message.erase(0, message.find("\n") + 1);
+	}
+	size_t pos = message.find_first_of(":");
+	size_t pos2= message.find_first_of('\n');
+	message = message.substr(pos+2,pos2);
+	return atoi(message.c_str());
+}
+
+//calculates the http header length
+int parseHeaderLength(char buf[BUFFER_SIZE]){
+	string message = buf;
+	int length=0;
+	for (int i =0; i< 5; i++){
+		length+=message.find("\n");
+		message.erase(0, message.find("\n") + 1);
+	}
+	return length;
+}
+
+//checks if file exists
+bool fileExists(string &str){
+	ifstream file(str.c_str());
+    return file.good();
+}
 
 //returns true if path leads to a directory
 bool isItDir(string path){
@@ -52,8 +81,7 @@ string getContent(string localPath){
 	if(localPath[localPath.length()-1 ]== '/'){
 		localPath=localPath.substr(0, localPath.length()-1);
 	}
-	if(localPath.length() > 0 and isItFile(localPath)){
-		
+	if(localPath.length() > 0 and isItFile(localPath)){	
 		std::ifstream ifs(localPath);
 		string content( (std::istreambuf_iterator<char>(ifs) ),(std::istreambuf_iterator<char>()    ) );
 		return content;
@@ -64,44 +92,56 @@ string getContent(string localPath){
 
 //prints an error to stderr when a non 200 code is received
 void printPotentialStderr(string outStr){
-	size_t pos = outStr.find_first_of("\n");	
+	size_t pos = outStr.find_first_of("\n");
 	if(outStr[9] !='2' or outStr[10] !='0' or outStr[11] !='0' ){			
 		outStr=outStr.substr(0,pos);
 		outStr=outStr.substr(13,outStr.length());
 		fprintf(stderr,"%s\n",outStr.c_str());
-		exit(-1);	//totdo, if not exited here, file will be created regardless if get was the command
+		
+		exit(1);	//todo, if not exited here, file will be created regardless if get was the command
 	}
 }
 
 //reads from socket and formats the answer message
 int readSocket(int clientSocket,char* argv[], int argc, string remotePath, string localPath){
-	string outStr="";
-	char buf[BUFFER_SIZE];
-	//cicles while reading from socket
-	while(1){
-		int numread;
-		if ((numread = read(clientSocket, buf, sizeof(buf) -1)) == -1){
+	cerr <<"foo"<< endl;
+	std::vector<char> outStr2;
+	char buf[7000000];
+
+	int numread;
+	int length=0;
+	int headerLength=1;
+	int numReadTotal=0;
+	numread=0;
+	//cicles while reading from socket	
+//	while(numReadTotal<(length+headerLength)){	
+		if ((numread= read(clientSocket, buf, sizeof(buf)-1)) == -1){
 			fprintf(stderr,"Error: reading from socket");		//TODO exit
-		}
-		if (numread == 0){
-			break;
+			exit(1);
 		}	
-		buf[numread] = '\0';
-		outStr+=buf;
-	}
-//fprintf(stderr,"%s",outStr.c_str());//todo delete
-	
+		if(numReadTotal == 0){			
+			length = parseLength(buf);							//get the content lenght from the header	
+			headerLength=parseHeaderLength(buf);
+		}		
+		numReadTotal+=numread;
+		for(int i = 0; i< numread; i++){
+			outStr2.push_back(buf[i]);
+		}
+
+cerr<<"numread " <<numread<< " " << numReadTotal << " " << length << " " << headerLength<< endl;	
+//	}
+	string outStr(outStr2.begin(), outStr2.end());
 	if(!strcmp("get",argv[1])){		//we got back a file, create a new file on clients side a write to it
 		string fileName= argv[2];
-		size_t pos = fileName.find_last_of("/");				
-		fileName = fileName.substr(pos+1, fileName.length());	
-		localPath+=fileName;
+		size_t pos = fileName.find_last_of("/");	
+		fileName = fileName.substr(pos+1, fileName.length());		
+		localPath+=fileName;	
 		for(int i = 0; i<=4; i++){		//delete first 5 lines = header
 			if(i==0){
 				printPotentialStderr(outStr);
 			}
 			outStr.erase(0, outStr.find("\n") + 1);
-		}	
+		}		
 		std::ofstream outfile (localPath);
 		outfile << outStr ;
 		outfile.close();	
@@ -120,12 +160,13 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 	}else if (!strcmp("rmd",argv[1])){
 		printPotentialStderr(outStr);
 	}	
+		
 	return 0;		//TODO?
 }
 
 //Sends a message and checks if writing to socket was ok.
 void send(string message,int clientSocket){
-    int n = write(clientSocket,message.c_str(),strlen(message.c_str()));
+	int n = write(clientSocket,message.c_str(),message.length());
     if (n < 0){ 
 		fprintf(stderr,"Error: Could not write to socket.");
 	}	
@@ -196,7 +237,7 @@ void validateArgs(int argc, char* argv[]){
 			else if(!strcmp("put",argv[i])){
 				if(argc != 4){
 					fprintf(stderr,"Unknown error.\n");
-					exit(-1); //todo no local path
+					exit(1); 
 				}
 				continue;
 			}
@@ -210,7 +251,7 @@ void validateArgs(int argc, char* argv[]){
 				continue;
 			}else{
 				fprintf(stderr,"Error: Wrong COMMAND argument %s \n",argv[i]);
-				exit(400);		//TODO
+				exit(1);		//todo?
 			}
 		}					
 	}
@@ -219,12 +260,11 @@ void validateArgs(int argc, char* argv[]){
 int main(int argc, char* argv[]) {
 	if(argc!=3 and argc!=4){
 		fprintf(stderr,"Error: Wrong number of arguments %d \n",argc);
-		exit(400);		//TODO
+		exit(1);		
 	}
 	validateArgs(argc,argv);
 	string remotePath(argv[2]);	
 	string localPath(getLocal(argc,argv));
-	int pathLen=strlen(remotePath.c_str());
 	int port = getPort(remotePath);
 	
 	int clientSocket = getSocket();								//creates a socket
@@ -232,7 +272,7 @@ int main(int argc, char* argv[]) {
 	server = gethostbyname("localhost");						//get the IP
     if (server == NULL) {
         fprintf(stderr,"Error: no such host\n");
-        exit(0);
+        exit(1);
     }
 	
 	struct sockaddr_in serverAddress;	
@@ -240,6 +280,7 @@ int main(int argc, char* argv[]) {
 	serverAddress.sin_family=AF_INET;
 	serverAddress.sin_port=htons(port);
 	bcopy((char *) server->h_addr, (char *)&serverAddress.sin_addr.s_addr, server->h_length);
+	
 	//Connect
 	if (connect(clientSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) != 0) {
 		perror("ERROR: Connection has failed");
@@ -249,17 +290,31 @@ int main(int argc, char* argv[]) {
 	//Connected, read the message
 	string message = argv[1];	
 	std::transform(message.begin(), message.end(), message.begin(), std::ptr_fun<int, int>(std::toupper));		//uppercase the command
-	size_t pos = remotePath.find_last_of(to_string(port));														//cut the argument behind the port number
+	size_t pos = remotePath.find_first_of(to_string(port));														//cut the argument behind the port number
 	char buf[1000];
 	time_t t = time(0);
 	struct tm time = *gmtime(&t);
 	strftime(buf, sizeof buf, "%a, %d %b %Y %H:%M:%S %Z", &time);		//format for Date
-
+	int length=0;
+	while ( port /= 10 ){	//decadic length of port integer
+		length++;
+	}
 	string content="";
 	if(!strcmp(argv[1],"put")){
-		content=getContent(localPath);
+		if(localPath[localPath.length()-1 ]== '/'){
+			localPath=localPath.substr(0, localPath.length()-1);
+			if(!isItFile(localPath)){
+				cerr<<"Local file not found."<<endl;
+				exit(1);
+			}
+		}
+		if(fileExists(localPath)){
+			content=getContent(localPath);		
+		}else{
+			content="";			
+		}	
 	}	
-	string justPath = remotePath.substr(pos+1);
+	string justPath = remotePath.substr(pos+1+length,remotePath.length());	
 	message+= " ";
 	message+=justPath;	
 	message+=" HTTP/1.1";
@@ -271,18 +326,14 @@ int main(int argc, char* argv[]) {
 	message+="Accept-Encoding: gzip, deflate\n";
 	message+="Content-Type: text/plain\n";
 	message+="Content-Length: ";
-	message+=to_string(pathLen);
+	message+=to_string(content.length());
 	message+="\n";
 	message+="\r\n";
 	message+=content;
-	
+		
 	send(message,clientSocket);
 	readSocket(clientSocket,argv, argc, remotePath, localPath);
-	
-    
-	
-	
-	
+
 	close(clientSocket);
 
 }

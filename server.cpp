@@ -53,7 +53,6 @@ void respond(string response, string content, int code, int sockfd2){
 	time_t t = time(0);
 	struct tm time = *gmtime(&t);
 	strftime(buf, sizeof buf, "%a, %d %b %Y %H:%M:%S %Z", &time);		//format for Date
-	
 	string combined ="HTTP/1.1 ";
 	combined+=to_string(code);
 	combined += " ";
@@ -64,12 +63,11 @@ void respond(string response, string content, int code, int sockfd2){
 	combined += "\n";
 	combined +="Content-Type: text/plain\n";
 	combined +="Content-Length: ";
-	combined +=to_string(strlen(content.c_str()));
+	combined +=to_string(content.length());
 	combined += "\n";
 	combined +="\r\n";
 	combined += content;
-	
-
+cerr<< 	to_string(content.length()) << " " <<content.length() << " " << combined.length()<< endl;
 	int n = write(sockfd2, combined.c_str()  ,combined.length());
 	if (n < 0) {
 		fprintf(stderr,"Error: Could not write to socket.\n");
@@ -88,7 +86,6 @@ string getUrl(string message){
 	std::istringstream f(message.c_str());
 	std::string line;   
 	getline(f, line);
-	
 	size_t pos = message.find_first_of("\n");
 	url = message.substr(0,pos+1);						//remove all but first line
 	url = url.substr(4,url.length());					//remove command
@@ -132,13 +129,13 @@ void rmd(string message, string url, int code, string root,string response, int 
 //Function for the MKD operation
 void mkd(string message, string url, int code, string root,string response, int sockfd2){
 	string content = "";
-	if(url[0]=='/'){		//remove the /, we are deling with a file
+	if(url[0]=='/'){		//remove the /
 		url=url.substr(1,url.length());
 	}
 	if(root.length() > 0 and root[root.length()]!='/'){	//append / to the end of url
 		root+="/";
 	}
-	url=root+url;					//append root to the url, if not specified, "" is appended
+	url=root+url;					//append root to the url, if not specified, "" is appended	
 	if(isItDir(url)){
 		response="Already exists.\n";
 		code = 400;		//todo
@@ -146,6 +143,7 @@ void mkd(string message, string url, int code, string root,string response, int 
 	}else{
 		int a = mkdir(url.c_str(),S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);	//todo no write permission?
 		if(a!=0){
+			
 			response="Unknown error.\n";
 			code = 400;
 			content=response;
@@ -297,15 +295,55 @@ void get(string message, string url, int code, string root,string response, int 
 	respond(response, content, code, sockfd2);	
 }
 
+//parses the content length from the HTTP header
+int parseLength(char buf[BUFFER_SIZE]){
+	string message = buf;
+	for (int i =0; i< 5; i++){
+		message.erase(0, message.find("\n") + 1);
+	}
+	size_t pos = message.find_first_of(":");
+	size_t pos2= message.find_first_of('\n');
+	message = message.substr(pos+2,pos2);
+	return atoi(message.c_str());
+}
+
+//calculates the http header length
+int parseHeaderLength(char buf[BUFFER_SIZE]){
+	string message = buf;
+	int length=0;
+	for (int i =0; i< 6; i++){
+		length+=message.find("\n");
+		message.erase(0, message.find("\n") + 1);
+	}
+	return length;
+}
+
 //reads the command
 void getRequest(int sockfd2, string root){
-	char buffer[BUFFER_SIZE];
-	bzero(buffer,BUFFER_SIZE);
-    int n = read(sockfd2,buffer,BUFFER_SIZE-1);
-    if (n < 0){
-		fprintf(stderr,"Error: reading from socket\n");
-    }
-	string message(buffer);
+	std::vector<char> outStr2;
+	char buf[BUFFER_SIZE];
+	int numread;
+	int length=0;
+	int headerLength=1;
+	int numReadTotal=0;
+	numread=0;
+	//cicles while reading from socket
+	while(numReadTotal<(length+headerLength)){		
+		if ((numread= read(sockfd2, buf, sizeof(buf)-1)) == -1){
+			fprintf(stderr,"Error: reading from socket");		//TODO exit
+			exit(1);
+		}
+		if(numReadTotal == 0){
+			length = parseLength(buf);							//get the content lenght from the header	
+			headerLength=parseHeaderLength(buf);
+		}		
+		numReadTotal+=numread;
+		for(int i = 0; i< numread; i++){
+			outStr2.push_back(buf[i]);
+		}	
+	}
+	
+	string message(outStr2.begin(), outStr2.end());
 	string url=getUrl(message);
 	int code=200;											//response code will be filled here
 	string response;	
@@ -324,10 +362,7 @@ void getRequest(int sockfd2, string root){
 	}else{
 		exit(1);	//Should not happen, commands are checked before on clients side.
 	}
-	
-	//fprintf(stderr,"%s",message.c_str());
-	
-	
+		
 }
 
 //returns the port specified in a parameter
@@ -449,8 +484,6 @@ int main(int argc, char* argv[]) {
 		if(sockfd2 < 0){
 			fprintf(stderr, "Error: Socket error,\n");
 		} 
-		
-		
 		//connection has been established
 		getRequest(sockfd2,rootStr);
 		close(sockfd2);
