@@ -67,7 +67,7 @@ void respond(string response, string content, int code, int sockfd2){
 	combined += "\n";
 	combined +="\r\n";
 	combined += content;
-cerr<< 	to_string(content.length()) << " " <<content.length() << " " << combined.length()<< endl;
+	//	cerr<< 	to_string(content.length()) << " " <<content.length() << " " << combined.length()<< endl;
 	int n = write(sockfd2, combined.c_str()  ,combined.length());
 	if (n < 0) {
 		fprintf(stderr,"Error: Could not write to socket.\n");

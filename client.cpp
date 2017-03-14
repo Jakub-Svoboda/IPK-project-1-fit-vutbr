@@ -104,9 +104,8 @@ void printPotentialStderr(string outStr){
 
 //reads from socket and formats the answer message
 int readSocket(int clientSocket,char* argv[], int argc, string remotePath, string localPath){
-	cerr <<"foo"<< endl;
 	std::vector<char> outStr2;
-	char buf[7000000];
+	char buf[BUFFER_SIZE];
 
 	int numread;
 	int length=0;
@@ -114,7 +113,7 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 	int numReadTotal=0;
 	numread=0;
 	//cicles while reading from socket	
-//	while(numReadTotal<(length+headerLength)){	
+	while(numReadTotal<(length+headerLength)){	
 		if ((numread= read(clientSocket, buf, sizeof(buf)-1)) == -1){
 			fprintf(stderr,"Error: reading from socket");		//TODO exit
 			exit(1);
@@ -127,9 +126,8 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 		for(int i = 0; i< numread; i++){
 			outStr2.push_back(buf[i]);
 		}
-
-cerr<<"numread " <<numread<< " " << numReadTotal << " " << length << " " << headerLength<< endl;	
-//	}
+		//cerr<<"numread " <<numread<< " " << numReadTotal << " " << length << " " << headerLength<< endl;	
+	}
 	string outStr(outStr2.begin(), outStr2.end());
 	if(!strcmp("get",argv[1])){		//we got back a file, create a new file on clients side a write to it
 		string fileName= argv[2];
