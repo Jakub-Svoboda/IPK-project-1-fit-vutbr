@@ -26,6 +26,27 @@
 #define BUFFER_SIZE 1024
 using namespace std;
 
+string getType(int argc, char *argv[]){
+	string response;
+	string message = argv[1];
+	if(message[0] == 'd'){	
+		return response="?type=file";			
+	}else if (message[0] == 'g'){	
+		return response="?type=file";
+	}else if (message[0] == 'p'){
+		return response="?type=file";
+	}else if (message[0] == 'l'){	
+		return response="?type=folder";
+	}else if (message[0] == 'm'){
+		return response="?type=folder";
+	}else if (message[0] == 'r'){
+		return response="?type=folder";
+	}else{	
+		exit(1);	//Should not happen, commands are checked before on clients side.
+	}	
+	return response;
+}
+
 //parses the content length from the HTTP header
 int parseLength(char buf[BUFFER_SIZE]){
 	string message = buf;
@@ -128,7 +149,7 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 			outStr2.push_back(buf[i]);
 		}
 	}
-	string outStr(outStr2.begin(), outStr2.end());
+	string outStr(outStr2.begin(), outStr2.end());	
 	if(!strcmp("get",argv[1])){		//we got back a file, create a new file on clients side a write to it
 		string fileName= argv[2];
 		size_t pos = fileName.find_last_of("/");	
@@ -230,7 +251,7 @@ string getLocal(int argc, char* argv[]){
 			if(isItFile(a)){
 				return local;
 			}else{
-				fprintf(stderr,"Error: local file not found.\n");
+				fprintf(stderr,"Error: local file not found. %s\n",local.c_str());
 				exit(1);
 			}
 		}
@@ -319,7 +340,7 @@ int main(int argc, char* argv[]) {
 		if(localPath[localPath.length()-1 ]== '/'){
 			localPath=localPath.substr(0, localPath.length()-1);
 			if(!isItFile(localPath)){
-				cerr<<"Local file not found."<<endl;
+				cerr<<"Error: local file not found."<<endl;
 				exit(1);
 			}
 		}
@@ -330,8 +351,11 @@ int main(int argc, char* argv[]) {
 		}	
 	}	
 	string justPath = remotePath.substr(pos+1+length,remotePath.length());	
+	string type=getType(argc,argv);
+	
 	message+= " ";
 	message+=justPath;	
+	message+=type;
 	message+=" HTTP/1.1";
 	message+="\n";
 	message+="Date: ";
@@ -345,7 +369,7 @@ int main(int argc, char* argv[]) {
 	message+="\n";
 	message+="\r\n";
 	message+=content;	
-	
+
 	send(message,clientSocket);	
 	readSocket(clientSocket,argv, argc, remotePath, localPath);
 	close(clientSocket);

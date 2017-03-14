@@ -33,7 +33,6 @@ bool goesUp(string url){
 	}else{
 		return false;
 	}
-
 }
 
 //returns true if path leads to a directory
@@ -76,7 +75,7 @@ void respond(string response, string content, int code, int sockfd2){
 	combined += "\n";
 	combined +="\r\n";
 	combined += content;
-	//	cerr<< 	to_string(content.length()) << " " <<content.length() << " " << combined.length()<< endl;
+	
 	int n = write(sockfd2, combined.c_str()  ,combined.length());
 	if (n < 0) {
 		fprintf(stderr,"Error: Could not write to socket.\n");
@@ -90,7 +89,7 @@ bool fileExists(string &str){
 }
 
 //parses the remote path from 
-string getUrl(string message){	
+string getUrl(string message){		
 	string url;
 	std::istringstream f(message.c_str());
 	std::string line;   
@@ -98,7 +97,8 @@ string getUrl(string message){
 	size_t pos = message.find_first_of("\n");
 	url = message.substr(0,pos+1);						//remove all but first line
 	url = url.substr(4,url.length());					//remove command
-	url = url.substr(0,url.length()-10);				//remove HTTP/1.1
+	size_t pos2 = url.find_first_of("?");
+	url = url.substr(0,pos2);				//remove ?type=folder HTTP/1.1	
 	return url;
 }
 
@@ -240,7 +240,7 @@ void put(string message, string url, int code, string root,string response, int 
 		if(fileExists(url)){
 			code=400;	//todo
 			response="Already exists.\n";
-			content=response;			
+			content=response;				
 		}else{	
 			for(int i = 0; i < 7; i++){
 				message.erase(0, message.find("\n") + 1);
@@ -364,7 +364,6 @@ int parseHeaderLength(char buf[BUFFER_SIZE]){
 
 //reads the command
 void getRequest(int sockfd2, string root){		
-	
 	std::vector<char> outStr2;
 	char buf[BUFFER_SIZE];
 	int numread;
@@ -374,12 +373,10 @@ void getRequest(int sockfd2, string root){
 	numread=0;	
 	//cicles while reading from socket
 	while(numReadTotal<(length+headerLength)){	
-
 		if ((numread= read(sockfd2, buf, sizeof(buf)-1)) == -1){
 			fprintf(stderr,"Error: reading from socket");		//TODO exit
 			exit(1);
-		}
-	
+		}	
 		if(numReadTotal == 0){
 			length = parseLength(buf);							//get the content lenght from the header	
 			headerLength=parseHeaderLength(buf);
@@ -388,7 +385,6 @@ void getRequest(int sockfd2, string root){
 		for(int i = 0; i< numread; i++){
 			outStr2.push_back(buf[i]);
 		}	
-	//cerr<<"bar numread: "<<numread << " numreadtotal: "<< numReadTotal<< " length: "<<length<< " headerLength: "<<headerLength <<endl;//TODO deleteme		
 	}
 	
 	string message(outStr2.begin(), outStr2.end());
@@ -525,8 +521,7 @@ int main(int argc, char* argv[]) {
 		exit(-1);			//TODO
 	}   
 	
-	while(1){
-		
+	while(1){	
 		listen(sockfd,10);
 		socklen_t clilen = sizeof(clientAddress);
 		int sockfd2 = accept(sockfd, (struct sockaddr *) &clientAddress, &clilen);
