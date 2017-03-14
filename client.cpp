@@ -114,7 +114,7 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 	int numReadTotal=0;
 	numread=0;
 	//cicles while reading from socket
-cerr<<"foo"<<endl;		
+//cerr<<"foo"<<endl;		
 	while(numReadTotal<(length+headerLength)){		
 		if ((numread= read(clientSocket, buf, sizeof(buf)-1)) == -1){
 			fprintf(stderr,"Error: reading from socket");		//TODO exit
@@ -128,9 +128,9 @@ cerr<<"foo"<<endl;
 		for(int i = 0; i< numread; i++){
 			outStr2.push_back(buf[i]);
 		}
-cerr<<"numread " <<numread<< " " << numReadTotal << " " << length << " " << headerLength<< endl;	
+//cerr<<"numread " <<numread<< " " << numReadTotal << " " << length << " " << headerLength<< endl;	
 	}
-cerr<<"bar"<<endl;	
+//cerr<<"bar"<<endl;	
 	string outStr(outStr2.begin(), outStr2.end());
 	if(!strcmp("get",argv[1])){		//we got back a file, create a new file on clients side a write to it
 		string fileName= argv[2];
