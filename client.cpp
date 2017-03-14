@@ -256,6 +256,7 @@ void validateArgs(int argc, char* argv[]){
 }
 
 int main(int argc, char* argv[]) {
+	
 	if(argc!=3 and argc!=4){
 		fprintf(stderr,"Error: Wrong number of arguments %d \n",argc);
 		exit(1);		
@@ -327,13 +328,13 @@ int main(int argc, char* argv[]) {
 	message+=to_string(content.length());
 	message+="\n";
 	message+="\r\n";
-	message+=content;
-		
+	message+=content;	
 	send(message,clientSocket);
+	
 	readSocket(clientSocket,argv, argc, remotePath, localPath);
 
 	close(clientSocket);
-
+	
 }
 
 

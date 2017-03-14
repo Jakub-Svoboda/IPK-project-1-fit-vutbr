@@ -319,7 +319,7 @@ int parseHeaderLength(char buf[BUFFER_SIZE]){
 }
 
 //reads the command
-void getRequest(int sockfd2, string root){
+void getRequest(int sockfd2, string root){	
 	std::vector<char> outStr2;
 	char buf[BUFFER_SIZE];
 	int numread;
@@ -353,7 +353,7 @@ void getRequest(int sockfd2, string root){
 		get(message,url,code,root, response,sockfd2);	
 	}else if (message[0] == 'P'){
 		put(message,url,code,root, response,sockfd2);
-	}else if (message[0] == 'L'){
+	}else if (message[0] == 'L'){	
 		lst(message,url,code,root, response,sockfd2);
 	}else if (message[0] == 'M'){
 		mkd(message,url,code,root, response,sockfd2);
