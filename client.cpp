@@ -113,8 +113,7 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 	int headerLength=1;
 	int numReadTotal=0;
 	numread=0;
-	//cicles while reading from socket
-//cerr<<"foo"<<endl;		
+	//cicles while reading from socket		
 	while(numReadTotal<(length+headerLength)){		
 		if ((numread= read(clientSocket, buf, sizeof(buf)-1)) == -1){
 			fprintf(stderr,"Error: reading from socket");		//TODO exit
@@ -128,21 +127,25 @@ int readSocket(int clientSocket,char* argv[], int argc, string remotePath, strin
 		for(int i = 0; i< numread; i++){
 			outStr2.push_back(buf[i]);
 		}
-//cerr<<"numread " <<numread<< " " << numReadTotal << " " << length << " " << headerLength<< endl;	
 	}
-//cerr<<"bar"<<endl;	
 	string outStr(outStr2.begin(), outStr2.end());
 	if(!strcmp("get",argv[1])){		//we got back a file, create a new file on clients side a write to it
 		string fileName= argv[2];
 		size_t pos = fileName.find_last_of("/");	
 		fileName = fileName.substr(pos+1, fileName.length());		
-		localPath+=fileName;	
-		for(int i = 0; i<=4; i++){		//delete first 5 lines = header
+		if(localPath.length()==0 ){
+			localPath+=fileName;	
+		}else{
+			if(localPath[localPath.length()-1]=='/'){		//remove the /, we are deling with a file
+				localPath=localPath.substr(0,localPath.length()-1);
+			}
+		}
+		for(int i = 0; i<5; i++){		//delete first 5 lines = header
 			if(i==0){
 				printPotentialStderr(outStr,clientSocket);
 			}
 			outStr.erase(0, outStr.find("\n") + 1);
-		}		
+		}				
 		std::ofstream outfile (localPath);
 		outfile << outStr ;
 		outfile.close();	
@@ -317,7 +320,6 @@ int main(int argc, char* argv[]) {
 			localPath=localPath.substr(0, localPath.length()-1);
 			if(!isItFile(localPath)){
 				cerr<<"Local file not found."<<endl;
-//cerr<<"foo this is client, closed now from local file not found"<<endl<<endl;
 				exit(1);
 			}
 		}
